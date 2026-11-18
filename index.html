@@ -75,17 +75,24 @@ let D=[],B=[],AL=[],P='month',C={a:'',b:''},V='home',SES='',U=null,F={q:'',t:'',
 try{SES=localStorage.getItem('ses')||'';U=JSON.parse(localStorage.getItem('usr')||'null')}catch(e){}
 const isV=()=>U&&U.role==='viewer',isM=()=>U&&U.role==='master';
 
-async function call(a,d){let r;
- try{const x=await fetch(API,{method:'POST',body:JSON.stringify({session:SES,action:a,data:d||{}})});r=await x.json()}
- catch(e){throw new Error('Koneksi gagal. Periksa internet lalu coba lagi.')}
+const cerr=(m,net)=>{const e=new Error(m);e.net=net;return e};
+async function call(a,d){
+ if(typeof API==='undefined'||/GANTI/.test(API))throw cerr('Alamat API di config.js belum diisi dengan benar.');
+ let x,r;
+ try{x=await fetch(API,{method:'POST',body:JSON.stringify({session:SES,action:a,data:d||{}})})}
+ catch(e){throw cerr(navigator.onLine?'Tidak bisa menghubungi server Apps Script. Biasanya akses deployment belum "Siapa saja", atau alamat API di config.js salah.':'Tidak ada koneksi internet.',navigator.onLine)}
+ try{r=JSON.parse(await x.text())}
+ catch(e){throw cerr('Balasan server tidak dikenali (HTTP '+x.status+'). Deployment kemungkinan belum diperbarui ke versi baru.',1)}
  if(!r.ok){const e=new Error(r.error);e.auth=r.auth;throw e}return r.data}
+function showErr(e){const el=$('#pinErr');el.textContent=e.message;
+ if(e.net){const l=document.createElement('a');l.href=API;l.target='_blank';l.textContent='Tes alamat API';l.style.cssText='display:block;margin-top:8px;color:#4f7cff';el.appendChild(l)}}
 function toast(m,good=true){const t=$('#toast');t.textContent=m;t.className='toast on'+(good?'':' bad');clearTimeout(toast.h);toast.h=setTimeout(()=>t.className='toast',2800)}
 function cats(t){return [...new Set([...DC[t],...D.filter(r=>r.t===t).map(r=>r.k)])]}
 
 async function load(quiet){
  if(!quiet)$('#v').innerHTML='<div class="sk"></div><div class="sk"></div><div class="sk"></div>';
  try{const r=await call('init');D=r.rows;B=r.budget;U=r.me;try{localStorage.setItem('usr',JSON.stringify(U))}catch(e){}$('#lock').classList.remove('on');render()}
- catch(e){if(e.auth){showLock(e.message)}else{$('#v').innerHTML=`<div class="card empty"><i>⚠️</i>${esc(e.message)}<button class="btn" onclick="load()">Coba lagi</button></div>`}}
+ catch(e){if(e.auth){showLock(e.message)}else{$('#v').innerHTML=`<div class="card empty"><i>⚠️</i>${esc(e.message)}${e.net?`<br><a href="${esc(API)}" target="_blank" style="color:#4f7cff">Tes alamat API</a>`:''}<button class="btn" onclick="load()">Coba lagi</button></div>`}}
 }
 // ===== login Google =====
 function showLock(m){SES='';try{localStorage.removeItem('ses')}catch(e){}$('#lock').classList.add('on');$('#pinErr').textContent=m||'';initG()}
@@ -95,7 +102,7 @@ function initG(){if(!window.google||!google.accounts)return setTimeout(initG,300
 async function onG(r){$('#pinErr').textContent='Memeriksa akses…';
  try{const x=await call('login',{idtoken:r.credential});SES=x.session;U={email:x.email,role:x.role};
   try{localStorage.setItem('ses',SES);localStorage.setItem('usr',JSON.stringify(U))}catch(e){}$('#pinErr').textContent='';load()}
- catch(e){$('#pinErr').textContent=e.message}}
+ catch(e){showErr(e)}}
 function logout(){try{localStorage.removeItem('ses');localStorage.removeItem('usr')}catch(e){}U=null;D=[];B=[];closeS();showLock('')}
 function openMenu(){$('#sh').innerHTML=`<h3 style="font-size:18px">Akun</h3><p class="mut">${U?esc(U.email):''}<br>Peran: <b>${U?U.role:''}</b></p>${isM()?'<button class="btn" onclick="openAkses()">Kelola Akses</button>':''}<button class="btn d" onclick="logout()">Keluar</button><button class="btn g" onclick="closeS()">Tutup</button>`;$('#ov').classList.add('on')}
 // ===== kelola akses (Master) =====
